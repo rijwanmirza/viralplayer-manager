@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Update and install dependencies
+apt update && apt upgrade -y
+apt install -y python3 python3-pip python3-venv nginx git unzip
+
+# Set project directory
+PROJECT_DIR="/var/www/viralplayer"
+
+# Clone the ViralPlayer Campaign Manager repository
+git clone https://github.com/your-repo/viralplayer-manager.git $PROJECT_DIR
+cd $PROJECT_DIR
+
+# Set up Python virtual environment
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Configure API key
+echo "API_KEY=5b0ed872714bc96238734eff98f5178000b2d76849e8c87d4fba75450653387f" > .env
+
+# Set up Gunicorn service
+echo "[Unit]
+Description=ViralPlayer Campaign Manager
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=$PROJECT_DIR
+ExecStart=$PROJECT_DIR/venv/bin/gunicorn -w 4 -b 0.0.0.0:8000 app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target" > /etc/systemd/system/viralplayer.service
+
+# Enable and start the service
+systemctl daemon-reload
+systemctl start viralplayer
+systemctl enable viralplayer
+
+# Configure Nginx
+echo "server {
+    listen 80;
+    server_name rijwanmirza.in;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}" > /etc/nginx/sites-available/viralplayer
+
+ln -s /etc/nginx/sites-available/viralplayer /etc/nginx/sites-enabled/
+nginx -t && systemctl restart nginx
+
+# Install SSL (Optional)
+apt install certbot python3-certbot-nginx -y
+certbot --nginx -d rijwanmirza.in
+
+# Final message
+echo "Installation Complete! Access your site at http://rijwanmirza.in"
